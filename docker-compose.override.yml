@@ -1,0 +1,11 @@
+# This is default file.
+# For production run: docker compose -f docker-compose.yml up
+services:
+  app:
+    build:
+      target: dev
+    # The Werkzeug debugger can execute code, so keep it on localhost only.
+    ports: !override
+      - "127.0.0.1:${APP_PORT:-8000}:8000"
+    volumes:
+      - ./app:/srv/app
