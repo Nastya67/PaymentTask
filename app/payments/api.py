@@ -77,7 +77,6 @@ ERROR_STATUS = {
     errors.CartEmpty: HTTPStatus.UNPROCESSABLE_ENTITY,
     errors.PaymentMethodNotFound: HTTPStatus.UNPROCESSABLE_ENTITY,
     errors.InvalidCartTotal: HTTPStatus.UNPROCESSABLE_ENTITY,
-    payment_errors.PaymentMismatch: HTTPStatus.UNPROCESSABLE_ENTITY,
 }
 
 

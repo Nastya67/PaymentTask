@@ -14,7 +14,7 @@ from app.db import db_session, transactional
 from app.errors import CartNotFound
 from app.models import Cart, Money
 from app.payments import provider
-from app.payments.errors import PaymentMismatch, PaymentNotFound
+from app.payments.errors import PaymentNotFound
 from app.payments.models import Payment, PaymentStatus
 
 logger = logging.getLogger(__name__)
@@ -44,6 +44,10 @@ def complete_payment(result: provider.PaymentResult) -> None:
     )
     if payment is None:
         raise PaymentNotFound("Payment not found")
+    if not payment.is_pending:
+        # A repeated or late event: the payment is already resolved, and its
+        # stock already released or sold.
+        return
     if result.succeeded:
         payment.succeed(result.provider_payment_id)
         payment.cart.check_out()

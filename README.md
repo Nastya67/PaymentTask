@@ -89,7 +89,6 @@ curl -X POST localhost:8000/carts/c1c1c1c1-c1c1-c1c1-c1c1-c1c1c1c1c1c1/payments 
 | 200 | Processed, or ignored because the payment is already resolved |
 | 400 | Malformed payload |
 | 404 | Unknown payment |
-| 422 | Amount or currency differs from the payment |
 
 Example: confirm the payment started above.
 

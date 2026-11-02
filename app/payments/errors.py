@@ -9,7 +9,3 @@ class PaymentInProgress(DomainError):
 
 class PaymentNotFound(DomainError):
     pass
-
-
-class PaymentMismatch(DomainError):
-    pass
