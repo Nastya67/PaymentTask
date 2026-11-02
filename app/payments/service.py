@@ -44,11 +44,6 @@ def complete_payment(result: provider.PaymentResult) -> None:
     )
     if payment is None:
         raise PaymentNotFound("Payment not found")
-    if not payment.is_pending:
-        if result.succeeded and payment.status == PaymentStatus.FAILED:
-            logger.error("Payment %s charged after it failed: refund", payment.id)
-            # todo refund - out of scope
-        return
     if result.succeeded:
         payment.succeed(result.provider_payment_id)
         payment.cart.check_out()
@@ -115,8 +110,7 @@ def _create_payment(
     total = pricing.calculate_total(cart.id)
     method = cart.user.payment_method(payment_method_id)
     payment = Payment.start(cart, method, total)
+    db_session.add(payment)
 
     inventory.reserve(cart.id)
-
-    db_session.add(payment)
     return payment
