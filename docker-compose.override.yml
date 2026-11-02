@@ -27,7 +27,7 @@ services:
       migrate:
         condition: service_completed_successfully
 
-  reconcile:
+  cancel-stale-payments:
     build:
       target: dev
     volumes:

@@ -25,10 +25,10 @@ def create_app() -> Flask:
     def remove_session(exception: BaseException | None) -> None:
         db_session.remove()
 
-    @app.cli.command("reconcile-payments")
-    def reconcile_payments() -> None:
-        """Resolve payments whose webhook never arrived."""
-        payment_service.reconcile_payments()
+    @app.cli.command("cancel-stale-payments")
+    def cancel_stale_payments() -> None:
+        """Cancel payments still pending after 24 hours."""
+        payment_service.cancel_stale_payments()
 
     @app.get("/health")
     def health():

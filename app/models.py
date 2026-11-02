@@ -1,6 +1,7 @@
 """SQLAlchemy models for the shop schema."""
 
 import uuid
+from dataclasses import dataclass
 from datetime import datetime
 from decimal import Decimal
 from enum import StrEnum
@@ -19,7 +20,13 @@ from sqlalchemy import (
     text,
 )
 from sqlalchemy.dialects.postgresql import UUID
-from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
+from sqlalchemy.orm import (
+    DeclarativeBase,
+    Mapped,
+    composite,
+    mapped_column,
+    relationship,
+)
 
 from app.errors import (
     CartEmpty,
@@ -55,6 +62,12 @@ class BaseTrackUpdates(Base):
         onupdate=func.now(),
         sort_order=2,
     )
+
+
+@dataclass(frozen=True)
+class Money:
+    amount: Decimal
+    currency: str
 
 
 class CartStatus(StrEnum):
@@ -221,7 +234,7 @@ class Payment(BaseTrackUpdates):
                 _status_in(PaymentStatus.PENDING, PaymentStatus.SUCCEEDED)
             ),
         ),
-        # Finds payments stuck in pending for reconciliation.
+        # Finds payments stuck in pending, to cancel them.
         Index(
             "ix_payments_pending_created_at",
             "created_at",
@@ -237,6 +250,7 @@ class Payment(BaseTrackUpdates):
     )
     amount: Mapped[Decimal] = mapped_column(Numeric(12, 2), nullable=False)
     currency: Mapped[str] = mapped_column(CHAR(3), nullable=False)
+    total: Mapped[Money] = composite("amount", "currency")
     status: Mapped[str] = mapped_column(
         Text, nullable=False, server_default=text(f"'{PaymentStatus.PENDING}'")
     )
@@ -251,18 +265,16 @@ class Payment(BaseTrackUpdates):
         cls,
         cart: Cart,
         payment_method: UserPaymentMethod,
-        amount: Decimal,
-        currency: str,
+        total: Money,
     ) -> "Payment":
         if payment_method.user_id != cart.user_id:
             raise PaymentMethodNotFound("Payment method not found")
-        if amount <= 0:
+        if total.amount <= 0:
             raise InvalidCartTotal("Cart total must be positive")
         return cls(
             cart=cart,
             payment_method=payment_method,
-            amount=amount,
-            currency=currency,
+            total=total,
             status=PaymentStatus.PENDING,
         )
 

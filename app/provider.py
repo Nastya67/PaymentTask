@@ -6,7 +6,8 @@ import json
 import uuid
 from dataclasses import dataclass
 from decimal import Decimal, InvalidOperation
-from enum import StrEnum
+
+from app.models import Money
 
 
 class ProviderUnavailable(Exception):
@@ -27,42 +28,30 @@ class PaymentResult:
 
     payment_id: uuid.UUID
     succeeded: bool
-    amount: Decimal
-    currency: str
+    total: Money
     provider_payment_id: str | None
     failure_reason: str | None
 
 
-class NoResult(StrEnum):
-    """Why the provider has no final outcome for a payment."""
-
-    NOT_FOUND = "not_found"  # the request never reached the provider
-    PROCESSING = "processing"
-    CANCELLED = "cancelled"
-
-
-def create_payment(token: str, amount: Decimal, currency: str, reference: str) -> None:
+def create_payment(token: str, total: Money, reference: str) -> None:
     """Mock: asks the provider to charge the card; the result arrives by webhook.
 
     reference is our payment id. The provider uses it as the idempotency key and
     sends it back in the webhook. A token containing "unavailable" raises
     ProviderUnavailable.
     """
-    if not token:
+    if "unavailable" in token:
         raise ProviderUnavailable
 
 
-def get_payment(reference: str) -> PaymentResult | NoResult:
-    """Mock: the provider never saw the payment, as its webhook never arrives."""
-    return NoResult.NOT_FOUND
+def cancel_payment(reference: str) -> PaymentResult | None:
+    """Mock: cancels the payment with our reference.
 
-
-def cancel_payment(reference: str) -> PaymentResult | NoResult:
-    """Mock: cancels a processing payment.
-
-    Returns CANCELLED, or the final outcome if the payment completed first.
+    Returns None if nothing was charged: the payment is cancelled, or the
+    provider never received it. Returns the final outcome if the payment
+    completed first.
     """
-    return NoResult.CANCELLED
+    return None
 
 
 def sign(body: bytes, secret: str) -> str:
@@ -78,8 +67,7 @@ def parse_webhook(body: bytes, signature: str | None, secret: str) -> PaymentRes
         result = PaymentResult(
             payment_id=uuid.UUID(event["payment_id"]),
             succeeded=succeeded,
-            amount=Decimal(event["amount"]),
-            currency=event["currency"],
+            total=Money(Decimal(event["amount"]), event["currency"]),
             provider_payment_id=event.get("provider_payment_id"),
             failure_reason=event.get("failure_reason"),
         )

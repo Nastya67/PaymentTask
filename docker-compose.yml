@@ -35,14 +35,16 @@ services:
       migrate:
         condition: service_completed_successfully
 
-  # Resolves payments whose webhook never arrived. In production, schedule
-  # `flask reconcile-payments` with the platform's scheduler instead.
-  reconcile:
+  # Cancels payments still pending after 24 hours, hourly. In production, schedule
+  # `flask cancel-stale-payments` with the platform's scheduler instead.
+  cancel-stale-payments:
     build: .
     command:
       - sh
       - -c
-      - while true; do flask --app app:create_app reconcile-payments; sleep 60; done
+      - >-
+        while true; do flask --app app:create_app cancel-stale-payments;
+        sleep 3600; done
     init: true
     environment:
       DATABASE_URL: postgresql+psycopg://shop:shop@db:5432/shop

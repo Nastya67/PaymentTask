@@ -44,8 +44,8 @@ class PaymentResponse:
             id=payment.id,
             cart_id=payment.cart_id,
             status=payment.status,
-            amount=payment.amount,
-            currency=payment.currency,
+            amount=payment.total.amount,
+            currency=payment.total.currency,
         )
 
 

@@ -13,7 +13,7 @@ docker compose up --build
 
 This starts PostgreSQL (`localhost:5434`), runs the migrations, loads sample
 data from `db/seed.sql`, starts the development server with auto reload on
-`http://localhost:8000` and the [reconciliation](#reconciliation) job.
+`http://localhost:8000` and the job that [cancels stale payments](#stale-payments).
 
 - Production-like run (gunicorn, no sample data):
   `docker compose -f docker-compose.yml up --build`
@@ -123,28 +123,31 @@ Rules the database enforces:
    `succeeded` and the cart `checked_out`. On failure, mark it `failed` and
    release the stock. The cart can then be paid again.
 
-## Reconciliation
+## Stale payments
 
 A payment stays `pending` if its webhook never arrives, for example when the
-provider was unavailable. A missing webhook does not mean the payment failed:
-the card may be charged. So the stock is released only once the provider
-confirms that there is no charge.
+provider was unavailable. Until it is resolved, its cart stays blocked and its
+stock reserved. A missing webhook does not mean the payment failed: the card may
+be charged.
 
-`flask --app app:create_app reconcile-payments` takes payments that have been
-`pending` for more than 15 minutes and asks the provider for each one, by our
-payment id:
+The CLI command `cancel-stale-payments` asks the provider to cancel every
+payment still `pending` after 24 hours, by our payment id:
+
+```sh
+docker compose exec app flask --app app:create_app cancel-stale-payments
+```
 
 | Provider answer | Action |
 |---|---|
-| succeeded / failed | Resolved like the webhook would |
-| not found (the request never reached it) | Failed, stock released |
-| still processing | Left pending; after 24 hours cancelled at the provider, then failed and stock released |
-| unavailable | Left pending, asked again on the next run |
+| cancelled, or never received | Failed, stock released |
+| already succeeded / failed | Resolved like the webhook would |
+| unavailable | Left pending, tried again on the next run |
 
-The `reconcile` service in Docker Compose runs it every minute. In production,
-schedule the command with the platform's scheduler instead (e.g. a Kubernetes
-CronJob). Concurrent runs and late webhooks are safe: resolving a payment locks
-it and skips it if it is already resolved.
+So the stock is released only once the provider confirms that there is no
+charge. The `cancel-stale-payments` service in Docker Compose runs the command
+every hour. In production, schedule it with the platform's scheduler instead
+(e.g. a Kubernetes CronJob). A late webhook is safe: resolving a payment locks it
+and skips it if it is already resolved.
 
 ## Authentication
 
@@ -176,9 +179,9 @@ The webhook is authenticated separately with the HMAC signature.
   holds products in one currency only.
 - The payment provider is mocked (`app/provider.py`). It accepts every request,
   except for card tokens containing `unavailable`, where it does not answer.
-  The result arrives only by webhook. Asked by the reconciliation job, it never
-  knows the payment, so locally every payment without a webhook is failed and
-  its stock released after 15 minutes.
+  The result arrives only by webhook. It cancels every payment it is asked to,
+  so locally every payment without a webhook is failed and its stock released
+  after 24 hours.
 - Stock is reserved when the payment starts and released if it fails.
 - Products cannot be added to or removed from a cart while its payment is
   `pending`. The cart service (outside this project) has to enforce that.
