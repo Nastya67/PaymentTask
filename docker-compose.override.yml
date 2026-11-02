@@ -9,3 +9,26 @@ services:
       - "127.0.0.1:${APP_PORT:-8000}:8000"
     volumes:
       - ./app:/srv/app
+    depends_on:
+      seed:
+        condition: service_completed_successfully
+
+  seed:
+    image: postgres:16-alpine
+    command: ["psql", "-v", "ON_ERROR_STOP=1", "--single-transaction", "-f", "/seed.sql"]
+    environment:
+      PGHOST: db
+      PGUSER: shop
+      PGPASSWORD: shop
+      PGDATABASE: shop
+    volumes:
+      - ./db/seed.sql:/seed.sql:ro
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+
+  reconcile:
+    build:
+      target: dev
+    volumes:
+      - ./app:/srv/app

@@ -5,6 +5,7 @@
 - Be short in conversations. do not provide extra explanations, just facts, until I ask you.
 - Validate all I tell you against the code or task. Argue with me if I'm wrong!
 - Respect clean code.
+- Split logic according to DDD.
 - Act as a lasy senior - best code is the non-written code.
 - Pay attention to the data volume to make optimal decision for performance.
 - Prevent vulnerabilities

@@ -29,6 +29,8 @@ WORKDIR /srv
 
 COPY --from=builder /srv/.venv /srv/.venv
 ENV PATH="/srv/.venv/bin:$PATH"
+COPY pyproject.toml ./
+COPY migrations ./migrations
 COPY app ./app
 
 RUN useradd --create-home app

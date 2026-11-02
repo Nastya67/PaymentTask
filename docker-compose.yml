@@ -8,7 +8,6 @@ services:
     ports:
       - "${DB_PORT:-5434}:5432"
     volumes:
-      - ./db/init:/docker-entrypoint-initdb.d:ro
       - db-data:/var/lib/postgresql/data
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U shop -d shop"]
@@ -16,15 +15,41 @@ services:
       timeout: 3s
       retries: 15
 
+  migrate:
+    build: .
+    command: ["alembic", "upgrade", "head"]
+    environment:
+      DATABASE_URL: postgresql+psycopg://shop:shop@db:5432/shop
+    depends_on:
+      db:
+        condition: service_healthy
+
   app:
     build: .
     environment:
       DATABASE_URL: postgresql+psycopg://shop:shop@db:5432/shop
+      PAYMENT_WEBHOOK_SECRET: ${PAYMENT_WEBHOOK_SECRET:-dev-webhook-secret}
     ports:
       - "${APP_PORT:-8000}:8000"
     depends_on:
-      db:
-        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+
+  # Resolves payments whose webhook never arrived. In production, schedule
+  # `flask reconcile-payments` with the platform's scheduler instead.
+  reconcile:
+    build: .
+    command:
+      - sh
+      - -c
+      - while true; do flask --app app:create_app reconcile-payments; sleep 60; done
+    init: true
+    environment:
+      DATABASE_URL: postgresql+psycopg://shop:shop@db:5432/shop
+      PAYMENT_WEBHOOK_SECRET: ${PAYMENT_WEBHOOK_SECRET:-dev-webhook-secret}
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
 
 volumes:
   db-data:

@@ -1,12 +1,23 @@
--- Payment endpoint take-home task
--- Base database schema for the online shop
---
--- Requires PostgreSQL 13 or later.
--- Run this file on an empty database before you start the task.
---
--- This file does not define the payments table.
--- You design that part yourself. Add it as a new migration.
+"""Base shop schema, as given by the task (without sample data, see db/seed.sql).
 
+Revision ID: 0001
+Revises:
+Create Date: 2026-10-31
+
+"""
+from typing import Sequence, Union
+
+from alembic import op
+
+revision: str = '0001'
+down_revision: Union[str, Sequence[str], None] = None
+branch_labels: Union[str, Sequence[str], None] = None
+depends_on: Union[str, Sequence[str], None] = None
+
+
+def upgrade() -> None:
+    op.execute(
+        """
 CREATE EXTENSION IF NOT EXISTS "pgcrypto";  -- for gen_random_uuid()
 
 
@@ -79,32 +90,9 @@ CREATE TABLE user_payment_methods (
 );
 
 CREATE INDEX idx_user_payment_methods_user_id ON user_payment_methods(user_id);
+"""
+    )
 
 
--- Sample data for local testing.
--- Delete or replace as you like.
-
-INSERT INTO users (id, email, name) VALUES
-    ('11111111-1111-1111-1111-111111111111', 'alice@example.com', 'Alice'),
-    ('22222222-2222-2222-2222-222222222222', 'bob@example.com',   'Bob');
-
-INSERT INTO products (id, name, price, currency, stock_quantity) VALUES
-    ('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa', 'Blue Kettle',   45.00, 'USD',  10),
-    ('bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb', 'Wool Blanket',  89.99, 'USD',   5),
-    ('cccccccc-cccc-cccc-cccc-cccccccccccc', 'Ceramic Mug',   12.50, 'USD', 100);
-
-INSERT INTO carts (id, user_id, status) VALUES
-    ('c1c1c1c1-c1c1-c1c1-c1c1-c1c1c1c1c1c1',
-     '11111111-1111-1111-1111-111111111111',
-     'active');
-
-INSERT INTO cart_items (cart_id, product_id, quantity, unit_price) VALUES
-    ('c1c1c1c1-c1c1-c1c1-c1c1-c1c1c1c1c1c1',
-     'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa', 1, 45.00),
-    ('c1c1c1c1-c1c1-c1c1-c1c1-c1c1c1c1c1c1',
-     'cccccccc-cccc-cccc-cccc-cccccccccccc', 2, 12.50);
-
-INSERT INTO user_payment_methods (id, user_id, provider_token, last_four, is_default) VALUES
-    ('11111111-2222-3333-4444-555555555555',
-     '11111111-1111-1111-1111-111111111111',
-     'tok_test_alice_visa', '4242', TRUE);
+def downgrade() -> None:
+    op.execute("DROP TABLE user_payment_methods, cart_items, carts, products, users")

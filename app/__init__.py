@@ -1,13 +1,34 @@
+import logging
 import os
 
 from flask import Flask
 from sqlalchemy import create_engine, text
 
+from app import payment_service
+from app.api import bp as api_bp
+from app.auth import login_manager
+from app.db import db_session
+
 
 def create_app() -> Flask:
+    logging.basicConfig(
+        level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s"
+    )
     app = Flask(__name__)
+    app.config["PAYMENT_WEBHOOK_SECRET"] = os.environ["PAYMENT_WEBHOOK_SECRET"]
     engine = create_engine(os.environ["DATABASE_URL"], pool_pre_ping=True)
-    app.extensions["engine"] = engine
+    db_session.configure(bind=engine)
+    login_manager.init_app(app)
+    app.register_blueprint(api_bp)
+
+    @app.teardown_appcontext
+    def remove_session(exception: BaseException | None) -> None:
+        db_session.remove()
+
+    @app.cli.command("reconcile-payments")
+    def reconcile_payments() -> None:
+        """Resolve payments whose webhook never arrived."""
+        payment_service.reconcile_payments()
 
     @app.get("/health")
     def health():
