@@ -5,6 +5,7 @@ from alembic import context
 from sqlalchemy import create_engine, pool
 
 from app.models import Base
+from app.payments import models as _payments_models  # noqa: F401  registers its tables
 
 logging.basicConfig(format="%(levelname)-5.5s [%(name)s] %(message)s")
 logging.getLogger("alembic").setLevel(logging.INFO)

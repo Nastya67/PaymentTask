@@ -4,8 +4,7 @@ import os
 from flask import Flask
 from sqlalchemy import create_engine, text
 
-from app import payment_service
-from app.api import bp as api_bp
+from app import payments
 from app.auth import login_manager
 from app.db import db_session
 
@@ -19,16 +18,11 @@ def create_app() -> Flask:
     engine = create_engine(os.environ["DATABASE_URL"], pool_pre_ping=True)
     db_session.configure(bind=engine)
     login_manager.init_app(app)
-    app.register_blueprint(api_bp)
+    app.register_blueprint(payments.bp)
 
     @app.teardown_appcontext
     def remove_session(exception: BaseException | None) -> None:
         db_session.remove()
-
-    @app.cli.command("cancel-stale-payments")
-    def cancel_stale_payments() -> None:
-        """Cancel payments still pending after 24 hours."""
-        payment_service.cancel_stale_payments()
 
     @app.get("/health")
     def health():

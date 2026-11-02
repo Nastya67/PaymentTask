@@ -17,10 +17,6 @@ class CartEmpty(DomainError):
     pass
 
 
-class PaymentInProgress(DomainError):
-    pass
-
-
 class PaymentMethodNotFound(DomainError):
     pass
 
@@ -30,12 +26,4 @@ class OutOfStock(DomainError):
 
 
 class InvalidCartTotal(DomainError):
-    pass
-
-
-class PaymentNotFound(DomainError):
-    pass
-
-
-class PaymentMismatch(DomainError):
     pass

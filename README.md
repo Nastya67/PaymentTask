@@ -111,6 +111,22 @@ Rules the database enforces:
 - A `succeeded` payment must have a `provider_payment_id`.
 - `amount > 0`.
 
+## Code layout
+
+The payment part, which this task adds, is in `app/payments/`. The rest of
+`app/` stands for the parts of the shop that already exist.
+
+```
+app/
+  payments/       api.py, service.py, models.py, provider.py, errors.py, cli.py
+  models.py       users, products, carts, saved payment methods
+  pricing.py      total calculation service (mocked)
+  inventory.py    stock reservation
+  auth.py         who is calling
+  db.py           database session and transactions
+migrations/       Alembic migrations
+```
+
 ## How a payment works
 
 1. **Start** (one transaction): lock the cart, check that it can be paid,
@@ -177,7 +193,7 @@ The webhook is authenticated separately with the HMAC signature.
 
 - The total calculation service is mocked as the sum of the cart items. A cart
   holds products in one currency only.
-- The payment provider is mocked (`app/provider.py`). It accepts every request,
+- The payment provider is mocked (`app/payments/provider.py`). It accepts every request,
   except for card tokens containing `unavailable`, where it does not answer.
   The result arrives only by webhook. It cancels every payment it is asked to,
   so locally every payment without a webhook is failed and its stock released

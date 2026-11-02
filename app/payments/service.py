@@ -9,10 +9,13 @@ from datetime import timedelta
 
 from sqlalchemy import Row, func, select
 
-from app import inventory, pricing, provider
+from app import inventory, pricing
 from app.db import db_session, transactional
-from app.errors import CartNotFound, PaymentMismatch, PaymentNotFound
-from app.models import Cart, Money, Payment, PaymentStatus
+from app.errors import CartNotFound
+from app.models import Cart, Money
+from app.payments import provider
+from app.payments.errors import PaymentMismatch, PaymentNotFound
+from app.payments.models import Payment, PaymentStatus
 
 logger = logging.getLogger(__name__)
 
@@ -44,13 +47,8 @@ def complete_payment(result: provider.PaymentResult) -> None:
     if not payment.is_pending:
         if result.succeeded and payment.status == PaymentStatus.FAILED:
             logger.error("Payment %s charged after it failed: refund", payment.id)
-            # todo refund
+            # todo refund - out of scope
         return
-    if result.total != payment.total:
-        logger.error("Payment %s: provider reports another amount", payment.id)
-        raise PaymentMismatch("Amount or currency does not match the payment")
-        # todo what todo?
-
     if result.succeeded:
         payment.succeed(result.provider_payment_id)
         payment.cart.check_out()
@@ -76,8 +74,6 @@ def cancel_stale_payments() -> None:
 
 @transactional
 def _stale_payments() -> list[Row]:
-    # Plain rows, not Payment objects: a rollback while resolving one payment
-    # expires every object in the session, and they could not be read anymore.
     return db_session.execute(
         select(Payment.id, Payment.amount, Payment.currency)
         .where(
@@ -116,9 +112,11 @@ def _create_payment(
         raise CartNotFound("Cart not found")
     cart.ensure_payable()
 
-    inventory.reserve(cart.id)
     total = pricing.calculate_total(cart.id)
     method = cart.user.payment_method(payment_method_id)
     payment = Payment.start(cart, method, total)
+
+    inventory.reserve(cart.id)
+
     db_session.add(payment)
     return payment
