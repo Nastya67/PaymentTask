@@ -1,7 +1,5 @@
 """Adapter for the external payment provider. The provider itself is mocked."""
 
-import hashlib
-import hmac
 import json
 import uuid
 from dataclasses import dataclass

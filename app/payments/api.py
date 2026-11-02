@@ -5,7 +5,7 @@ from dataclasses import dataclass
 from decimal import Decimal
 from http import HTTPStatus
 
-from flask import Blueprint, current_app, jsonify, request
+from flask import Blueprint, jsonify, request
 from flask_login import current_user, login_required
 
 from app import errors
@@ -48,9 +48,7 @@ def start_payment(cart_id: uuid.UUID):
 @bp.post("/webhooks/payment-result")
 #@webhook_auth
 def payment_result_webhook():
-    result = provider.parse_webhook(
-        request.get_data(),
-    )
+    result = provider.parse_webhook(request.get_data())
     service.complete_payment(result)
     return "", HTTPStatus.OK
 
@@ -95,6 +93,12 @@ def handle_domain_error(error: errors.DomainError):
 @bp.errorhandler(InvalidRequest)
 def handle_invalid_request(error: InvalidRequest):
     return {"error": str(error)}, HTTPStatus.UNPROCESSABLE_ENTITY
+
+
+@bp.errorhandler(provider.InvalidWebhook)
+def handle_invalid_webhook(error: provider.InvalidWebhook):
+    return {"error": str(error)}, HTTPStatus.BAD_REQUEST
+
 
 @bp.errorhandler(Exception)
 def handle_exception(error: Exception):

@@ -14,7 +14,6 @@ def create_app() -> Flask:
         level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s"
     )
     app = Flask(__name__)
-    app.config["PAYMENT_WEBHOOK_SECRET"] = os.environ["PAYMENT_WEBHOOK_SECRET"]
     engine = create_engine(os.environ["DATABASE_URL"], pool_pre_ping=True)
     db_session.configure(bind=engine)
     login_manager.init_app(app)

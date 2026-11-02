@@ -18,8 +18,21 @@ data from `db/seed.sql`, starts the development server with auto reload on
 - Production-like run (gunicorn, no sample data):
   `docker compose -f docker-compose.yml up --build`
 - Reset the database: `docker compose down -v`
-- Settings: `DB_PORT` (default `5434`), `APP_PORT` (default `8000`),
-  `PAYMENT_WEBHOOK_SECRET` (default `dev-webhook-secret`).
+- Settings: `DB_PORT` (default `5434`), `APP_PORT` (default `8000`)
+
+## Tests
+
+Requires the database container and [uv](https://docs.astral.sh/uv/).
+
+```sh
+docker compose up -d db
+uv run pytest
+```
+
+The tests use their own database, `shop_test` on the same server. It is
+created and migrated automatically and emptied before every test, so the
+development data stays untouched. Set `TEST_DATABASE_URL` to use another one;
+its name must end with `_test`.
 
 ## API
 
@@ -59,9 +72,6 @@ curl -X POST localhost:8000/carts/c1c1c1c1-c1c1-c1c1-c1c1-c1c1c1c1c1c1/payments 
 
 `POST /webhooks/payment-result`
 
-`X-Signature` is the hex HMAC-SHA256 of the raw body, keyed with
-`PAYMENT_WEBHOOK_SECRET`.
-
 ```json
 {
   "type": "payment.succeeded",
@@ -76,18 +86,17 @@ curl -X POST localhost:8000/carts/c1c1c1c1-c1c1-c1c1-c1c1-c1c1c1c1c1c1/payments 
 
 | Status | Reason |
 |---|---|
-| 204 | Processed, or ignored because the payment is already resolved |
+| 200 | Processed, or ignored because the payment is already resolved |
 | 400 | Malformed payload |
-| 401 | Invalid signature |
 | 404 | Unknown payment |
 | 422 | Amount or currency differs from the payment |
 
-Sending a signed webhook by hand:
+Example: confirm the payment started above.
 
 ```sh
-body='{"type":"payment.succeeded","payment_id":"<id>","amount":"70.00","currency":"USD","provider_payment_id":"ch_1"}'
-sig=$(printf '%s' "$body" | openssl dgst -sha256 -hmac dev-webhook-secret | awk '{print $NF}')
-curl -X POST localhost:8000/webhooks/payment-result -H "X-Signature: $sig" -d "$body"
+curl -X POST localhost:8000/webhooks/payment-result -d '{
+  "type": "payment.succeeded", "payment_id": "<id from the start response>",
+  "amount": "70.00", "currency": "USD", "provider_payment_id": "ch_123"}'
 ```
 
 ## Database schema
@@ -95,37 +104,7 @@ curl -X POST localhost:8000/webhooks/payment-result -H "X-Signature: $sig" -d "$
 Alembic migrations are in `migrations/versions`:
 
 - `0001_base_schema.py`: the base schema given by the task.
-- `0002_payments.py`: the `payments` table.
-- `0003_index_pending_payments.py`: index for finding stuck `pending` payments.
-
-To print the payments schema as SQL:
-
-```sh
-DATABASE_URL=postgresql+psycopg://x@localhost/x uv run alembic upgrade 0001:0002 --sql
-```
-
-Rules the database enforces:
-
-- At most one `pending` or `succeeded` payment per cart (partial unique index).
-  This blocks double charges even under concurrent requests.
-- A `succeeded` payment must have a `provider_payment_id`.
-- `amount > 0`.
-
-## Code layout
-
-The payment part, which this task adds, is in `app/payments/`. The rest of
-`app/` stands for the parts of the shop that already exist.
-
-```
-app/
-  payments/       api.py, service.py, models.py, provider.py, errors.py, cli.py
-  models.py       users, products, carts, saved payment methods
-  pricing.py      total calculation service (mocked)
-  inventory.py    stock reservation
-  auth.py         who is calling
-  db.py           database session and transactions
-migrations/       Alembic migrations
-```
+- `0002_payments.py`: the `payments` table and its indexes.
 
 ## How a payment works
 
@@ -139,7 +118,7 @@ migrations/       Alembic migrations
    `succeeded` and the cart `checked_out`. On failure, mark it `failed` and
    release the stock. The cart can then be paid again.
 
-## Stale payments
+## Stale payments (creative impulse :)
 
 A payment stays `pending` if its webhook never arrives, for example when the
 provider was unavailable. Until it is resolved, its cart stays blocked and its
@@ -162,32 +141,15 @@ docker compose exec app flask --app app:create_app cancel-stale-payments
 So the stock is released only once the provider confirms that there is no
 charge. The `cancel-stale-payments` service in Docker Compose runs the command
 every hour. In production, schedule it with the platform's scheduler instead
-(e.g. a Kubernetes CronJob). A late webhook is safe: resolving a payment locks it
-and skips it if it is already resolved.
+(e.g. a Kubernetes CronJob). 
 
 ## Authentication
 
-The API does not authenticate users itself. It trusts the `X-User-Id` header
-and assumes an upstream API gateway:
+The API does not authenticate users itself. It trusts the `X-User-Id` header just for the 
+test-task purpose.
 
-- authenticates the user (session, OAuth, JWT, …),
-- removes any `X-User-Id` header sent by the client and sets it itself,
-- is the only way to reach the service.
-
-**Risk:** if the service can be reached without that gateway, anyone can send
-any user id and start payments with that user's saved cards. User ids are not
-secrets. The local Docker setup publishes the port directly, so this
-assumption only holds behind such a gateway.
-
-**For production:** verify a signed token in the service, e.g. a JWT in
-`Authorization: Bearer …` with the identity provider's public key, and take
-the user id from its `sub` claim. Only `load_user_from_request` in
-`app/auth.py` needs to change.
-
-Authorization is enforced in the service: a user can only pay their own carts
-with their own payment methods.
-
-The webhook is authenticated separately with the HMAC signature.
+The webhook is not authenticated either: anyone who can reach it can mark a
+payment as paid. In production it must verify the provider's signature.
 
 ## Assumptions
 
@@ -195,16 +157,7 @@ The webhook is authenticated separately with the HMAC signature.
   holds products in one currency only.
 - The payment provider is mocked (`app/payments/provider.py`). It accepts every request,
   except for card tokens containing `unavailable`, where it does not answer.
-  The result arrives only by webhook. It cancels every payment it is asked to,
-  so locally every payment without a webhook is failed and its stock released
-  after 24 hours.
+  The result arrives only by webhook. 
 - Stock is reserved when the payment starts and released if it fails.
 - Products cannot be added to or removed from a cart while its payment is
   `pending`. The cart service (outside this project) has to enforce that.
-- Webhook signatures have no timestamp. A replayed webhook does no harm,
-  because a resolved payment ignores further events.
-
-## Out of scope
-
-- **Refunds:** a `succeeded` webhook for a payment that already `failed` is
-  logged as an error, because it needs a refund.
