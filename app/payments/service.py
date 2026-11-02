@@ -45,8 +45,9 @@ def complete_payment(result: provider.PaymentResult) -> None:
     if payment is None:
         raise PaymentNotFound("Payment not found")
     if not payment.is_pending:
-        # A repeated or late event: the payment is already resolved, and its
-        # stock already released or sold.
+        if result.succeeded and payment.status == PaymentStatus.FAILED or result.total != payment.total:
+            # That would mean buggy provider.
+            logger.error("Payment %s charged after it failed: refund", payment.id)
         return
     if result.succeeded:
         payment.succeed(result.provider_payment_id)

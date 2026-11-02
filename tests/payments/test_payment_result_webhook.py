@@ -88,3 +88,10 @@ def test_malformed_payload(client):
     response = client.post("/webhooks/payment-result", json={"type": "refunded"})
 
     assert response.status_code == 400
+
+
+def test_success_after_failure_is_logged(client, payment, caplog):
+    send(client, payment.id, "payment.failed")
+    send(client, payment.id, "payment.succeeded")
+
+    assert f"Payment {payment.id} charged after it failed: refund" in caplog.text
