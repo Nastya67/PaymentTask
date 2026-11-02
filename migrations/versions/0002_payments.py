@@ -39,9 +39,11 @@ def upgrade() -> None:
     sa.UniqueConstraint('provider_payment_id')
     )
     op.create_index('uq_payments_cart_id_active', 'payments', ['cart_id'], unique=True, postgresql_where=sa.text("status IN ('pending', 'succeeded')"))
+    op.create_index('ix_payments_pending_created_at', 'payments', ['created_at'], unique=False, postgresql_where=sa.text("status = 'pending'"))
 
 
 def downgrade() -> None:
     """Downgrade schema."""
+    op.drop_index('ix_payments_pending_created_at', table_name='payments', postgresql_where=sa.text("status = 'pending'"))
     op.drop_index('uq_payments_cart_id_active', table_name='payments', postgresql_where=sa.text("status IN ('pending', 'succeeded')"))
     op.drop_table('payments')
